@@ -46,6 +46,8 @@ exec &> >(tee -a "$LOGFILE" | tee -a "/mnt/root/$LOGFILE")
 
 # This function will be executed inside the arch-chroot.
 archroot() {
+  # Enable error handling again, as this is technically a new execution.
+  set -euxo pipefail
   # Set and generate locales.
   echo "LANG=$LANGASDF" >> /etc/locale.conf
   echo "KEYMAP=$KEYMAP" >> /etc/vconsole.conf
