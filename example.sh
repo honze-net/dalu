@@ -75,7 +75,7 @@ archroot() {
 
   # Install and configure sudo.
   pacman -S --needed --noconfirm sudo
-  sed -i '/^# %wheel ALL=(ALL) NOPASSWD: ALL/s/^# //' /etc/sudoers # Uncomment line with sed
+  sed -i '/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/s/^# //' /etc/sudoers # Uncomment line with sed
 
   # Create a new user and add it to the wheel group.
   useradd -m -G wheel $USERNAME
@@ -182,8 +182,8 @@ EOT
   #done
   
   # Reconfigure sudo, so that a password is need to elevate privileges.
-  sed -i '/^# %wheel ALL=(ALL) ALL/s/# //' /etc/sudoers # Uncomment line with sed
-  sed -i '/^%wheel ALL=(ALL) NOPASSWD: ALL/s/^/# /' /etc/sudoers # Comment line with sed
+  sed -i '/^# %wheel ALL=(ALL:ALL) ALL/s/# //' /etc/sudoers # Uncomment line with sed
+  sed -i '/^%wheel ALL=(ALL:ALL) NOPASSWD: ALL/s/^/# /' /etc/sudoers # Comment line with sed
   echo "Finished archroot." 
 }
 
