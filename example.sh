@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Arch Linux Deployment
+# Deploy Arch Linux Unattended
 # Example script for virtual environments
+# https://github.com/honze-net/dalu
 # https://wiki.archlinux.org/index.php/installation_guide
 
 # Enable error handling.
@@ -11,10 +12,9 @@ set -euxo pipefail
 LOGFILE="install.log"
 exec &> >(tee -a "$LOGFILE")
 
-# Configuration options.
-# All variables should be exported/declared, so that they will be availabe in the arch-chroot.
+# Configuration options. All variables should be exported, so that they will be availabe in the arch-chroot.
 export KEYMAP="de-latin1"
-export LANGASDF="de_DE.UTF-8"
+export LANG="de_DE.UTF-8"
 export LOCALE="de_DE.UTF-8 UTF-8"
 export TIMEZONE="Europe/Berlin"
 export COUNTRY="Germany"
@@ -23,21 +23,20 @@ export USERNAME="user"
 export PASSWORD=$USERNAME # It is not recommended to set production passwords here.
 export DISK="/dev/sda"
 
-# Find and set mirrors.
-# Note: This mirror list will be automatically copied into the installed system.
+# Find and set mirrors. This mirror list will be automatically copied into the installed system.
 pacman -Sy --needed --noconfirm reflector
 reflector --country $COUNTRY --age 12 --latest 10 --sort rate --protocol https --save /etc/pacman.d/mirrorlist
 
-# Use MBR, partition whole disk with one partition, bootable, no swap.
+# Use MBR, partition the whole disk with one partition, bootable, no swap.
 parted -a optimal $DISK mklabel msdos mkpart primary 0% 100% set 1 boot on 
 
 # Get the "/dev/..." name of the first partition, format it and mount.
 export ROOTPARTITION=$(ls $DISK*1*) 
 mkfs.ext4 $ROOTPARTITION -L root
-mount $ROOTPARTITION /mnt/
+mount $ROOTPARTITION /mnt
 
-# Copy initial files and update fstab.
-pacstrap /mnt base linux linux-firmware
+# Install base files and update fstab.
+pacstrap -K /mnt base linux linux-firmware
 genfstab -U /mnt >> /mnt/etc/fstab
 
 # Extend logging to persistant storage.
@@ -48,9 +47,10 @@ exec &> >(tee -a "$LOGFILE" | tee -a "/mnt/root/$LOGFILE")
 archroot() {
   # Enable error handling again, as this is technically a new execution.
   set -euxo pipefail
+
   # Set and generate locales.
-  echo "LANG=$LANGASDF" >> /etc/locale.conf
-  echo "KEYMAP=$KEYMAP" >> /etc/vconsole.conf
+  echo "LANG=$LANG" >> /etc/locale.conf
+  #echo "KEYMAP=$KEYMAP" >> /etc/vconsole.conf
   sed -i "/$LOCALE/s/^#//" /etc/locale.gen # Uncomment line with sed
   locale-gen
 
@@ -61,7 +61,7 @@ archroot() {
   # Set hostname.
   echo "$HOSTNAME" > /etc/hostname
 
-  # Create initramfs optional?
+  # This is optional.
   # mkinitcpio -P
   
   # Install boot loader.
@@ -91,32 +91,22 @@ archroot() {
   pacman -S --needed --noconfirm gnome gnome-tweaks
   systemctl enable gdm
   sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'de')]"
-  sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
-  sudo -u $USERNAME curl -o /home/$USERNAME/pexels-photo-2387793.jpeg "https://images.pexels.com/photos/2387793/pexels-photo-2387793.jpeg"
-  sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.background picture-uri "/home/$USERNAME/pexels-photo-2387793.jpeg"
+  #sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.interface gtk-theme "Adwaita-dark"
+  sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.interface color-scheme "prefer-dark"
+
+  #sudo -u $USERNAME curl -o /home/$USERNAME/pexels-photo-2387793.jpeg "https://images.pexels.com/photos/2387793/pexels-photo-2387793.jpeg"
+  #sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.background picture-uri "/home/$USERNAME/pexels-photo-2387793.jpeg"
 
   # Install git as prerequisite for the next steps.
-  pacman -S --needed --noconfirm git base-devel
+  pacman -S --needed --noconfirm git base-devel cargo
 
   # Install an AUR helper.
   cd /tmp
-  sudo -u $USERNAME git clone https://github.com/actionless/pikaur
-  cd pikaur
-  sudo -u $USERNAME makepkg -fsri --noconfirm
-  cd .. && rm -R pikaur
-
-  # Install missing firmware. (Check if you need those. Probably for VirtualBox and VMware.)
-  cd /tmp
-  sudo -u $USERNAME git clone https://aur.archlinux.org/aic94xx-firmware.git
-  cd aic94xx-firmware
+  sudo -u $USERNAME git clone https://aur.archlinux.org/paru-bin.git
+  cd paru-bin
   sudo -u $USERNAME makepkg -sri --noconfirm
-  cd .. && rm -R aic94xx-firmware
-
-  cd /tmp
-  sudo -u $USERNAME git clone https://aur.archlinux.org/wd719x-firmware.git
-  cd wd719x-firmware
-  sudo -u $USERNAME makepkg -sri --noconfirm
-  cd .. && rm -R wd719x-firmware
+  cd .. && rm -R paru-bin
+  sed -i '/^#Color/s/#//' /etc/pacman.conf # Uncomment line with sed
 
   # Check if a hypervisor is used and install the corresponding guest software.
   pacman -S --needed --noconfirm dmidecode 
@@ -141,7 +131,7 @@ if [ $TILIX_ID ] || [ $VTE_VERSION ]; then
 fi
 EOT
 
-  sudo -u $USERNAME pikaur -S --needed --noconfirm powerline powerline-fonts-git
+  sudo -u $USERNAME paru -S --needed --noconfirm powerline powerline-fonts-git
   cat >> /home/$USERNAME/.bashrc << 'EOT'
 powerline-daemon -q
 POWERLINE_BASH_CONTINUATION=1
@@ -163,7 +153,7 @@ source /usr/lib/python3.*/site-packages/powerline/bindings/tmux/powerline.conf
 EOT
 
   # Install and set an icon theme for Gnome.
-  sudo -u $USERNAME pikaur -S --needed --noconfirm paper-icon-theme-git
+  sudo -u $USERNAME paru -S --needed --noconfirm paper-icon-theme-git
   sudo -u $USERNAME dbus-launch gsettings set org.gnome.desktop.interface icon-theme 'Paper'
 
   # This is an example of how to install packages by custom groups. Adapt as you like.
@@ -177,7 +167,7 @@ EOT
   #PACKAGES[EXPLOITATION]="metasploit"
 
   #for package in ${PACKAGES[@]}; do
-  #  sudo -u $USERNAME pikaur -S --needed --noconfirm $package \
+  #  sudo -u $USERNAME paru -S --needed --noconfirm $package \
   #    || echo "$package" >> /home/$USERNAME/packages-with-errors.txt
   #done
   
